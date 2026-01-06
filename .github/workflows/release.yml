@@ -39,7 +39,7 @@ jobs:
           DATE_STR=$(date +'%Y%m%d')
           BUILD_NUM=${{ github.run_number }}
           TAG_NAME="v${DATE_STR}${BUILD_NUM}"
-          
+
           # Version for package.json (SemVer compliant: YYYY.MM.DD<build-number>)
           # Note: Month and Day should be numbers, build number appended or added as patch
           # Strategy: Use YYYY.MM.<DD><BUILD> is risky if build is large.
@@ -50,32 +50,32 @@ jobs:
           # Let's use format: Year.Month.Day*100+Build (if build is small) or just Year.Month.Day*1000 + Build?
           # Actually, simply setting package version to match the intent of "increasing":
           # Let's use Major=Year, Minor=Month, Patch=Day*100 + Build
-          
+
           YEAR=$(date +'%Y')
           MONTH=$(date +'%-m')
           DAY=$(date +'%-d')
           # Ensure patch doesnt overflow if desired, but 31 * 100 + 100 = 3200 is fine.
-          
+
           # User asked for Tag: vyyyyMMdd<build-number>
           # We will apply that tag to git.
           # For package.json, we will update it to be valid and related.
-          
+
           SEMVER="${YEAR}.${MONTH}.$((DAY * 100 + BUILD_NUM))"
-          
+
           echo "Ref Tag: $TAG_NAME"
           echo "SemVer: $SEMVER"
-          
+
           echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
-          
+
           # Update package.json version without git tagging
           npm version $SEMVER --no-git-tag-version
 
       - name: Package VSIX
-        run: vsce package
+        run: vsce package --no-dependencies
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.versioning.outputs.tag_name }}
-          files: "*.vsix"
+          files: '*.vsix'
           generate_release_notes: true
