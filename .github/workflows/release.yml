@@ -1,0 +1,81 @@
+name: Release VSIX
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Install vsce
+        run: npm install -g @vscode/vsce
+
+      - name: Set version and tag
+        id: versioning
+        run: |
+          # Format: vYYYYMMDD<build-number>
+          DATE_STR=$(date +'%Y%m%d')
+          BUILD_NUM=${{ github.run_number }}
+          TAG_NAME="v${DATE_STR}${BUILD_NUM}"
+          
+          # Version for package.json (SemVer compliant: YYYY.MM.DD<build-number>)
+          # Note: Month and Day should be numbers, build number appended or added as patch
+          # Strategy: Use YYYY.MM.<DD><BUILD> is risky if build is large.
+          # Safer Strategy for SemVer: <Year>.<Month>.<Day><Build> 
+          # e.g. 2026.1.615 (Day 6 + Build 15)?? No, that mixes logic.
+          # Simple: Year.Month.Day-Build (Prerelease) or Year.Month.Day+Build (Build metadata)
+          # VS Code Marketplace only supports numeric semantic versions x.y.z.
+          # Let's use format: Year.Month.Day*100+Build (if build is small) or just Year.Month.Day*1000 + Build?
+          # Actually, simply setting package version to match the intent of "increasing":
+          # Let's use Major=Year, Minor=Month, Patch=Day*100 + Build
+          
+          YEAR=$(date +'%Y')
+          MONTH=$(date +'%-m')
+          DAY=$(date +'%-d')
+          # Ensure patch doesnt overflow if desired, but 31 * 100 + 100 = 3200 is fine.
+          
+          # User asked for Tag: vyyyyMMdd<build-number>
+          # We will apply that tag to git.
+          # For package.json, we will update it to be valid and related.
+          
+          SEMVER="${YEAR}.${MONTH}.$((DAY * 100 + BUILD_NUM))"
+          
+          echo "Ref Tag: $TAG_NAME"
+          echo "SemVer: $SEMVER"
+          
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+          
+          # Update package.json version without git tagging
+          npm version $SEMVER --no-git-tag-version
+
+      - name: Package VSIX
+        run: vsce package
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.versioning.outputs.tag_name }}
+          files: "*.vsix"
+          generate_release_notes: true
